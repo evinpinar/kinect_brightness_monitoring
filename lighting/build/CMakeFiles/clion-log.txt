@@ -1,7 +1,0 @@
-/home/evinpinar/clion-2020.1.2/bin/cmake/linux/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /home/evinpinar/Documents/artekmed/lighting
-CMake Error at CMakeLists.txt:4 (cmake_minimum_required):
-  CMake 3.20 or higher is required.  You are running version 3.16.5
-
-
--- Configuring incomplete, errors occurred!
-See also "/home/evinpinar/Documents/artekmed/lighting/build/CMakeFiles/CMakeOutput.log".
