@@ -1,0 +1,3 @@
+/home/evinpinar/Documents/artekmed/lighting/build/CMakeFiles/rebuild_cache.dir
+/home/evinpinar/Documents/artekmed/lighting/build/CMakeFiles/enumerate_devices.dir
+/home/evinpinar/Documents/artekmed/lighting/build/CMakeFiles/edit_cache.dir
