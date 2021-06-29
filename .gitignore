@@ -1,1 +1,6 @@
-lighting/build
+cmake-build-release/
+build/
+
+##### VisualStudioCode
+**/.vscode/
+
