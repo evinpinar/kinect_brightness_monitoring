@@ -11,7 +11,7 @@
 using namespace cv;
 
 void detect_brightness(cv::Mat& frame, double& brightness){
-    printf("within brightness %d %d \n", frame.rows, frame.cols);
+    // printf("within brightness %d %d \n", frame.rows, frame.cols);
     //Scalar m = cv::mean(frame);
     //brightness = mean(frame)[0];
     Mat hsv;
@@ -55,7 +55,10 @@ int main(int argc, char **argv){
     int captureFrameCount;
     k4a_capture_t capture = NULL;
 
-    captureFrameCount = 100;
+    captureFrameCount = 30*60*3;
+    bool is_binary_exposure=false;
+    bool is_calculate_hist=false;
+    bool is_auto_exposure=true;
     printf("Capturing %d frames\n", captureFrameCount);
 
     uint32_t device_count = k4a_device_get_installed_count();
@@ -123,13 +126,21 @@ int main(int argc, char **argv){
     k4a_device_get_color_control(device, K4A_COLOR_CONTROL_POWERLINE_FREQUENCY, &color_mode, &control_value);
     printf("K4A_COLOR_CONTROL_POWERLINE_FREQUENCY priority Mode: %d Value: %d \n", color_mode, control_value);
 
+    bool support_auto;
+    int min_val, max_val, step_val, default_val;
+    k4a_color_control_mode_t default_mode;
 
-    // Exposure mapping: https://github.com/microsoft/Azure-Kinect-Sensor-SDK/blob/develop/src/color/color_priv.h
-    k4a_device_set_color_control(device, K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE, K4A_COLOR_CONTROL_MODE_MANUAL, 33330);
-    k4a_device_set_color_control(device, K4A_COLOR_CONTROL_WHITEBALANCE, K4A_COLOR_CONTROL_MODE_MANUAL, 5000);
+    k4a_device_get_color_control_capabilities(device, K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE, &support_auto, &min_val, &max_val, &step_val, &default_val, &default_mode);
+    printf("K4A_COLOR_CONTROL_EXPOSURE_CAPABILITIES auto: %d min: %d max: %d step: %d default val: %d \n", support_auto, min_val, max_val, step_val, default_val);
 
-    //k4a_device_set_color_control(device, K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE, K4A_COLOR_CONTROL_MODE_AUTO, 0);
-    //k4a_device_set_color_control(device, K4A_COLOR_CONTROL_WHITEBALANCE, K4A_COLOR_CONTROL_MODE_AUTO, 0);
+    is_auto_exposure = true;
+    if(is_auto_exposure){
+        k4a_device_set_color_control(device, K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE, K4A_COLOR_CONTROL_MODE_AUTO, 0);
+        k4a_device_set_color_control(device, K4A_COLOR_CONTROL_WHITEBALANCE, K4A_COLOR_CONTROL_MODE_AUTO, 0);
+    }else{
+        k4a_device_set_color_control(device, K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE, K4A_COLOR_CONTROL_MODE_MANUAL, 20000);
+        k4a_device_set_color_control(device, K4A_COLOR_CONTROL_WHITEBALANCE, K4A_COLOR_CONTROL_MODE_MANUAL, 6216);
+    }
 
     double curr_brightness, prev_brightness, target_min_brightness, target_max_brightness;
     prev_brightness = 0;
@@ -137,7 +148,9 @@ int main(int argc, char **argv){
     target_max_brightness = 160;
     int curr_exposure;
     curr_exposure= 5;
+    // Exposure mapping: https://github.com/microsoft/Azure-Kinect-Sensor-SDK/blob/develop/src/color/color_priv.h
     int device_exposure_mapping []  = {500, 1250, 2500, 8330, 16670, 33330, 41670, 50000, 66670, 83330, 100000, 116670, 13330};
+    // 500, 1250, 2500, 10000, 20000, 30000, 40000,50000, 60000, 80000, 100000, 120000, 130000
 
     while (captureFrameCount-- > 0)
     {
@@ -157,21 +170,19 @@ int main(int argc, char **argv){
             return 0;
         }
 
-        printf("Capture");
-
         // Probe for a color image
         image = k4a_capture_get_color_image(capture);
         if (image)
         {
 	    
-            printf(" | Color res:%4dx%4d stride:%5d ",
+            printf("Capture | Color res:%4dx%4d stride:%5d ",
                    k4a_image_get_height_pixels(image),
                    k4a_image_get_width_pixels(image),
                    k4a_image_get_stride_bytes(image));
 
             printf(" Exposure: %4ld ", k4a_image_get_exposure_usec(image));
             printf(" ISO: %4d", k4a_image_get_iso_speed(image));
-            printf(" White Balance: %4d \n", k4a_image_get_white_balance(image));
+            printf(" White Balance: %4d ", k4a_image_get_white_balance(image));
 
             uint8_t* buffer = k4a_image_get_buffer(image);
             // convert the raw buffer to cv::Mat
@@ -180,7 +191,8 @@ int main(int argc, char **argv){
             cv::Mat colorMat(rows , cols, CV_8UC4, (void*)buffer, cv::Mat::AUTO_STEP);
             detect_brightness(colorMat, curr_brightness);
             printf(" Brigthness: %4f \n", curr_brightness);
-            calculate_histogram(colorMat);
+            if(is_calculate_hist)
+                calculate_histogram(colorMat);
 
             // If it is the first frame, initiate prev brightness
             if(prev_brightness==0){
@@ -188,19 +200,17 @@ int main(int argc, char **argv){
             }
 
             // Update exposure
-            if(curr_brightness<target_min_brightness && curr_exposure < 11 ){
+            if(curr_brightness<target_min_brightness && curr_exposure < 11 && is_binary_exposure){
+                std::cout<<"Update exposure to up! "<< std::endl;
                 k4a_device_set_color_control(device, K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE, K4A_COLOR_CONTROL_MODE_MANUAL, curr_exposure+1);
-            }else if(curr_brightness>target_max_brightness && curr_exposure >0 ){
+            }else if(curr_brightness>target_max_brightness && curr_exposure >0 && is_binary_exposure){
+                std::cout<<"Update exposure to down! "<< std::endl;
                 k4a_device_set_color_control(device, K4A_COLOR_CONTROL_EXPOSURE_TIME_ABSOLUTE, K4A_COLOR_CONTROL_MODE_MANUAL, curr_exposure-1);
             }
 
             prev_brightness = curr_brightness;
 
             k4a_image_release(image);
-        }
-        else
-        {
-            printf(" | Color None                       \n");
         }
 
         // release capture
